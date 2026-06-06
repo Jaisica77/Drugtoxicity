@@ -142,13 +142,13 @@ def predict_toxicity(descriptors: dict) -> dict:
 
     # Positive factors (reduce score)
     if 150 <= mw <= 500 and 0 <= logp <= 4 and tpsa <= 90:
-        score -= 0.05
+        score -= 0.02
         flags.append("✓ Drug-like physicochemical profile (low risk)")
 
     # Clamp between 0 and 1
     score = max(0.0, min(1.0, score))
 
-    verdict = "TOXIC" if score >= 0.50 else "NON-TOXIC"
+    verdict = "TOXIC" if score >= 0.35 else "NON-TOXIC"
     risk_level = (
         "High Risk"   if score >= 0.65 else
         "Moderate Risk" if score >= 0.40 else
