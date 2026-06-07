@@ -29,7 +29,7 @@ def parse_smiles_descriptors(smiles: str) -> dict:
     c_count = s.count('C') - s.lower().count('cl')
     mw += c_count * 1.5
 
-    # LogP (Wildman-Crippen approximation)
+    # LogP
     logp = 0.0
     logp += s.count('C') * 0.53
     logp += s.count('F') * 0.14
@@ -95,7 +95,7 @@ def predict_toxicity(descriptors: dict, smiles: str) -> dict:
     heavy_atoms = descriptors['HeavyAtoms']
     s           = smiles
 
-    # ── Lipinski Rule of Five ──────────────────────────────────────────
+    # ── Lipinski Rule of Five ─────────────────────────────────────────
     if mw > 500:
         score += 0.15
         flags.append(f"High MW ({mw:.0f} > 500) – poor absorption")
@@ -122,21 +122,35 @@ def predict_toxicity(descriptors: dict, smiles: str) -> dict:
 
     # ── Toxicophore Patterns ──────────────────────────────────────────
     toxic_patterns = [
-        ('[N+](=O)[O-]', 0.20, 'Nitro group – mutagenicity risk'),
+        # Classic dangerous groups
+        ('[N+](=O)[O-]', 0.25, 'Nitro group – mutagenicity risk'),
         ('C(=O)Cl',      0.25, 'Acid chloride – highly reactive'),
         ('[N-]=[N+]',    0.20, 'Diazo group – carcinogenicity risk'),
         ('SS',           0.15, 'Disulfide – hepatotoxicity risk'),
         ('C(F)(F)F',     0.15, 'Trifluoromethyl – metabolic concern'),
+        # Heavy metals
         ('[Hg]',         0.40, 'Mercury – heavy metal toxicity'),
         ('[As]',         0.40, 'Arsenic – heavy metal toxicity'),
         ('[Pb]',         0.40, 'Lead – heavy metal toxicity'),
         ('[Cd]',         0.40, 'Cadmium – heavy metal toxicity'),
+        # Reactive groups
         ('N=N',          0.18, 'Azo group – potential carcinogen'),
         ('C=C=C',        0.15, 'Allene group – reactive intermediate'),
         ('OO',           0.18, 'Peroxide bond – oxidative stress risk'),
         ('[N+]',         0.10, 'Quaternary nitrogen – membrane disruption'),
         ('C#N',          0.12, 'Nitrile group – cyanide release risk'),
         ('S(=O)(=O)Cl',  0.22, 'Sulfonyl chloride – highly reactive'),
+        # Aromatic toxicity
+        ('c1ccccc1',     0.12, 'Benzene ring – aromatic toxicity risk'),
+        ('c1ccc2ccccc2c1', 0.20, 'Polycyclic aromatic – carcinogenicity risk'),
+        # Receptor activity / bioactivity flags
+        ('OCCN',         0.12, 'Aminoethanol group – membrane disruption'),
+        ('C=CC=C',       0.15, 'Conjugated diene – reactive metabolite risk'),
+        ('[nH]',         0.10, 'Aromatic NH – bioactivity flag'),
+        # Halogenated compounds
+        ('CBr',          0.12, 'Alkyl bromide – alkylating agent risk'),
+        ('CI',           0.14, 'Alkyl iodide – highly reactive'),
+        ('CCl',          0.10, 'Alkyl chloride – potential hepatotoxin'),
     ]
 
     for pattern, penalty, reason in toxic_patterns:
@@ -168,7 +182,7 @@ def predict_toxicity(descriptors: dict, smiles: str) -> dict:
         score += 0.08
         flags.append("High HBA + LogP – possible CYP450 inhibition risk")
 
-    # ── Positive Factors ──────────────────────────────────────────────
+    # ── Positive Factors (reduce score) ───────────────────────────────
     if 150 <= mw <= 500 and 0 <= logp <= 4 and tpsa <= 90:
         score -= 0.02
         flags.append("✓ Drug-like physicochemical profile (low risk)")
@@ -177,15 +191,15 @@ def predict_toxicity(descriptors: dict, smiles: str) -> dict:
         score -= 0.02
         flags.append("✓ Appropriate size and polarity")
 
-    # Clamp
+    # Clamp between 0 and 1
     score = max(0.0, min(1.0, score))
 
-    verdict = "TOXIC" if score >= 0.35 else "NON-TOXIC"
+    verdict = "TOXIC" if score >= 0.25 else "NON-TOXIC"
 
     risk_level = (
-        "High Risk"      if score >= 0.55 else
-        "Moderate Risk"  if score >= 0.35 else
-        "Low Risk"       if score >= 0.20 else
+        "High Risk"     if score >= 0.55 else
+        "Moderate Risk" if score >= 0.35 else
+        "Low Risk"      if score >= 0.20 else
         "Very Low Risk"
     )
 
